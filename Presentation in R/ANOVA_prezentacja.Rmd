@@ -1,0 +1,376 @@
+---
+title: "ANOVA - Palmer Penguins"
+author: "Amelia Madej,  Weronika Duda <br> Informatyka i Ekonometria, II rok"
+date: "21-12-2023"
+output: 
+  ioslides_presentation:
+    css: 'styles.css'
+    logo: logo.png
+    widescreen: true
+    transition: faster
+---
+***
+<div style="text-align:center">
+  <img src="palmerpenguins.png" style="width:90%; height:auto;"/>
+</div>
+
+
+## Opis danych
+Dane zawarte w pakiecie **palmerpenguins** zostały zebrane w latach 2007 - 2009 na archipelagu Palmer na Antarktyce przez Dr. Kristen Gorman razem z Palmer Station Long Term Ecological Research Program, który jest częścią **The US Long Term Ecological Research Network**. 
+
+W pakiecie palmerpenguins znajdują się dwa zbiory danych: *penguins* i *penguins_raw*. Oba zbiory zawieraja informacje o 344 dorosłych pingwinach z trzech różnych gatunków: *Adelie*,  *Chinstrap* oraz *Gentoo*. 
+
+W tym projekcie do analizy będziemy wykorzystywać zbiór *penguins*. 
+
+**Uwaga:** W prezentacji zostanie przedstawiona przykładowa ANOVA wykorzystująca zmienną *flipper_length_mm*. Analiza wariancji dla pozostałych zmiennych możliwa jest w aplikacji Shiny.
+
+```{r, include=FALSE}
+options(repos = c(CRAN = "https://cran.r-project.org"))
+install.packages("car")
+```
+
+
+## Niezbędne pakiety
+<div class ="columns-2" style = "width: 1100px">
+
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(dplyr)
+library(ggplot2)
+library(mice)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+library(psych)
+library(knitr)
+library(RColorBrewer)
+library(palmerpenguins)
+library(car)
+```
+</div>
+
+
+## Wgląd w zbiór
+
+```{r, comment = "", echo = FALSE}
+glimpse(penguins)
+```
+
+## Wyświetlenie kilku początkowych obserwacji
+
+```{r}
+head(penguins)
+```
+
+
+## Wyznaczenie statystyk opisowych
+
+```{r, message=FALSE, warning=FALSE}
+summary(penguins)
+```
+
+```{r, warning=FALSE, message=FALSE}
+describeBy(select_if(penguins, is.numeric), penguins$species)
+```
+
+## Wykres punktowy
+
+```{r, include=FALSE}
+# Ręczne przypisanie kolorów dla gatunków
+kolor_gatunkow <- c("Adelie" = "#ff6d00", "Chinstrap" = "#c45bca", "Gentoo" = "#067376")
+```
+
+```{r, fig.align='center', warning=FALSE, message=FALSE}
+penguins %>%
+  ggplot() +
+  aes(x = species, y = flipper_length_mm, color = species) +
+  geom_jitter() +
+  labs(title = "Długość płetwy dla poszczególnych gatunków",
+       x = "Gatunek", 
+       y = "Długość płetwy (mm)",
+       color = "Gatunki:") +
+  theme_light() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5)) +
+  scale_color_manual(values = kolor_gatunkow)
+```
+
+## Wykresy pudełkowe
+
+```{r, fig.align='center', warning=FALSE, message=FALSE}
+penguins %>%
+  ggplot() +
+  geom_boxplot(aes(x = species, y = flipper_length_mm,
+               color = species)) +
+  geom_jitter(aes(x = species, y = flipper_length_mm,
+              color = species))+
+  labs(title = "Długość płetwy dla poszczególnych gatunków",
+       x = "Gatunek", 
+       y = "Długość płetwy (mm)",
+       color = "Gatunki:") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_manual(values = kolor_gatunkow)
+```
+
+## Wykresy gęstości
+
+```{r, fig.align='center', warning=FALSE, message=FALSE}
+penguins %>%
+  ggplot() +
+  geom_density(aes(x = flipper_length_mm, 
+                 fill = species,
+                 color = species),
+               alpha = 0.2) +
+  facet_wrap(~species, ncol = 3) +
+  labs(title = "Długość płetwy", 
+       x = "Długość płetwy (mm)", 
+       y = "Gęstość",
+       fill = "Gatunki:",
+       color = "Gatunki:") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_manual(values = kolor_gatunkow) +
+  scale_fill_manual(values = kolor_gatunkow)
+```
+
+## Analiza wariancji - ANOVA
+
+- Analiza	 wariancji to	zespół metod statystycznych służących do porównywania wartości średnich w trzech lub więcej populacjach. W najprostszej formie analiza wariancji to test statystyczny, którego wynik mówi o tym, czy wartości średnie w rozpatrywanych populacjach są sobie równe.
+
+
+- W literaturze rozpowszechnione jest określenie ANOVA (ang. **ANalysis Of VAriance**).
+
+## Porównywanie średnich grup poprzez analizę wariancji
+
+Pomimo tego, że ANOVA służy do wnioskowania na temat średnich różnych grup, metoda ta nosi nazwę "Analiza wariancji". Nazywana jest tak, ponieważ porównuje wariancję "między" (wariancję między różnymi grupami) oraz wariancję "wewnątrz" (wariancję wewnątrz każdej grupy). Jeśli wariancja międzygrupowa jest znacząco większa niż wariancja wewnątrzgrupowa, średnie grup są uznawane za różne. W przeciwnym razie nie możemy wyciągnąć jednoznacznych wniosków. Obydwie wariancje są porównywane ze sobą poprzez obliczenie stosunku \[\text{wariancja międzygrupowa} /\text{wariancja wewnątrzgrupowa}\]
+oraz porównanie tego stosunku z wartością krytyczną z rozkładu prawdopodobieństwa Fishera (wartość krytyczna oparta na określonym poziomie istotności, zazwyczaj 5%).
+
+## Wyróżnia się:
+
+- jednoczynnikową analizę wariancji (gdy badany jest wpływ pojedynczego czynnika klasyfikującego)
+
+- wieloczynnikową analizę wariancji (gdy badany jest wpływ wielu czynników klasyfikujących)
+
+## Cel analizy wariancji
+
+Jak już wcześniej zostało wspomnianie, ANOVA służy do porównywania grup (trzech lub więcej). W praktyce oznacza to:
+
+- badanie, czy pomiary są podobne między różnymi poziomami zmiennej kategorycznej,
+
+- porównywanie wpływu różnych poziomów zmiennej kategorycznej na zmienną ilościową,
+
+- wyjaśnianie zmiennej ilościowej na podstawie zmiennej jakościowej.
+
+
+## Założenia analizy wariancji
+
+1. Analizowana zmienna jest zmienną ilościową.
+
+2. Każda z k niezależnych populacji ma rozkład normalny \(N(\mu_i, \sigma_i)\), gdzie \(i = 1, 2, \ldots, k\).
+
+3. Rozkłady te mają równe wariancje (założenie jednorodności wariancji):
+
+\[\sigma_1^2 = \sigma_2^2 = \ldots = \sigma_k^2 = \sigma^2\]
+
+
+## Wybrane dane – jednoczynnikowa analiza wariancji
+
+Jako przykład, skorzystamy z ANOVA, aby odpowiedzieć na pytanie: "Czy długość płetw różni się między trzema gatunkami pingwinów?".
+
+- Zmienna zależna (czynnik): długość płetwy.
+
+- Zmienna niezależna (grupująca): gatunek pingwina spośród *Adelie*, *Gentoo* i *Chinstrap*.
+
+## ANOVA
+
+ Wcześniej postawione pytanie możemy zaproponować w formie następujących hipotez:
+
+Hipoteza zerowa (H~0~):
+\[ \mu_{\text{Adelie}} = \mu_{\text{Chinstrap}} = \mu_{\text{Gentoo}} \]
+
+Hipoteza alternatywna (H~1~):
+\[ \text{co najmniej jedna średnia się różni} \]
+
+**Uwaga:** hipoteza alternatywna nie zakłada, że wszystkie średnie są różne! Przeciwieństwem stwierdzenia, że wszystkie średnie są równe (H~0~), jest stwierdzenie, że przynajmniej jedna średnia różni się od pozostałych (H~1~).
+
+```{r}
+model <- aov(flipper_length_mm ~ species, data = penguins)
+summary(model)
+```
+
+Zakładając (na razie), że założenia zostały spełnione, zauważamy następujące informacje:
+
+- Wartość statystyki F to 594.8, gdzie:
+
+  - df~1~ = 2 (odczytane z kolumny **Df**, rząd **species**),
+
+  - df~2~ = 339 (oczytane z kolumny **Df**, rząd **Residuals**)
+
+- Wartość **p-value** (odczytana z kolumny **Pr(>F)**) jest prawie równa 0, co jest znacznie mniejsze niż 0,05, więc odrzucamy **H~0~**. To znaczy, mamy wystarczające dowody, aby stwierdzić, że istnieje istotna statystycznie różnica między grupami.
+
+- Wynik mówi nam, że przynajmniej jedna z grup różni się istotnie od pozostałych, ale nie informuje nas, która grupa (lub grupy), ani ile. W dalszej części przeprowadzimy testy **post hoc** dla dalszej analizy.
+
+
+---
+
+#### Sprawdzanie założeń
+
+## Testowanie normalności rozkładów
+
+$$
+H_0: \text{dane pochodzą z rozkładu normalnego}
+$$
+
+$$
+H_1: \text{dane nie pochodzą z rozkładu normalnego}
+$$
+
+Podczas sprawdzania normalności w analizie wariancji jednoczynnikowej, należy to zrobić dla błędów losowych (a nie dla zmiennej zależnej). "Błędy losowe" można przybliżyć przez "reszty". Dla analizy wariancji jednoczynnikowej, każda obserwacja będzie miała odpowiadającą jej resztę, czyli różnicę między wartością obserwowaną zmiennej zależnej dla tej obserwacji, a średnią zmiennej zależnej dla tej grupy. Na przykład pierwszy pingwin w zbiorze danych pochodzi z grupy Adelie, która ma średnią długość płetw wynoszącą 189,95 mm. Długość płetwy tego konkretnego pingwina to 181 mm. Jego reszta wynosi więc 181 − 189.95 = −8.95. Podobnie można obliczyć wartości reszt dla wszystkich 342 pingwinów. Sprawdzimy normalność, korzystając z tych 342 wartości reszt.
+
+
+**Uwaga:** Ponieważ najmniejszy rozmiar próbki w każdej grupie (tj. dla każdego gatunku) wynosi 68 (czyli mamy duże próbki), zatem nie musimy sprawdzać normalności. Jednak dla potwierdzenia, przeprowadzamy test normalności **Shapiro-Wilka** oraz rysujemy histogram.
+
+
+
+```{r, fig.align='center'}
+shapiro.test(model$residuals)
+
+hist(model$residuals, main = "Histogram Reszt",
+     xlab = "Wartości Reszt", ylab = "Gęstość", col = "grey", border = "black")
+```
+
+Biorąc pod uwagę wartość **p-value** dla testu normalności Shapiro-Wilka oraz wygląd histogramu, możemy jednoznacznie stwierdzić, że założenie normalności jest spełnione.
+
+
+
+## Sprawdzanie równości wariancji
+
+\[
+H_0: \text{wariancje są równe}
+\]
+
+\[
+H_1: \text{co najmniej jedna wariancja jest różna}
+\]
+
+Założenie równości wariancji również może być sprawdzone wizualnie - za pomocą wykresów pudełkowych - oraz bardziej formalnie, przy użyciu testu statystycznego.
+
+```{r, fig.align='center', message=FALSE, warning=FALSE}
+penguins %>%
+  ggplot() +
+  geom_boxplot(aes(x = species, y = flipper_length_mm,
+               color = species)) +
+  geom_jitter(aes(x = species, y = flipper_length_mm,
+              color = species))+
+  labs(title = "Długość płetwy dla poszczególnych gatunków",
+       x = "Gatunek", 
+       y = "Długość płetwy (mm)",
+       color = "Gatunki:") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_manual(values = kolor_gatunkow)
+```
+
+```{r}
+leveneTest(flipper_length_mm ~ species,
+  penguins)
+```
+
+Na wykresie pudełkowym można zauważyć fakt, że pudełka i wąsy mają porównywalny rozmiar dla wszystkich gatunków. Występuje kilka wartości odstających, co obrazują punkty poza wąsami, ale nie zmienia to faktu, że rozrzut jest bardzo podobny między różnymi gatunkami.
+
+Biorąc pod uwagę wartość **p-value** dla testu jednorodności wariancji Lavene'a, która jest większa niż poziom istotności 0,05 - nie odrzucamy hipotezy zerowej. Nie mamy podstaw do stwierdzenia, że wariancje istotnie się od siebie różnią.
+
+
+## Co jeśli założenia nie są spełnione?
+
+Jeśli założenia nie zostały spełnione, dostępne są różne opcje, takie jak:
+
+- Użycie Welch ANOVA, która nie wymaga równości wariancji,
+
+- Użycie alternatywnego testu nieparametrycznego, takiego jak test Kruskalla-Wallisa,
+
+- Transformacja zmiennej zależnej.
+
+Jednakże, dla jednoczynnikowej analizy wariancji, te techniki wychodzą poza zakres tego tematu.
+
+
+## Test post hoc
+
+Gdy test jednoczynnikowej analizy wariancji daje istotny wynik, powszechne jest przeprowadzenie dodatkowych testów post-hoc, aby zobaczyć, które konkretne grupy różnią się istotnie od siebie. Testy post-hoc polegają głównie na przeprowadzaniu wielu testów t-Studenta w celu sprawdzenia różnic między każdą parą kategorii.
+
+Jednakże, nie jest to takie proste, jak przeprowadzenie testów t-Studenta dla każdej pary. Za każdym razem, gdy przeprowadzamy test hipotezy, istnieje szansa popełnienia błędu I rodzaju (prawdopodobieństwo tego zdarzenia jest równe przyjętemu poziomowi istotności, zwykle α = 0,05). Dlatego, gdy przeprowadza się wiele testów hipotez, szansa popełnienia błędu I rodzaju naturalnie wzrasta, ponieważ jesteśmy narażeni na prawdopodobieństwo wystąpienia tego błędu nie tylko raz, ale wielokrotnie. Z tego powodu musimy zastosować korektę wartości p wynikających z tych testów, aby uwzględnić ten efekt. W tym celu przeprowadzimy test HSD Tukey'a:
+
+```{r}
+TukeyHSD(model)
+```
+
+Dla każdej pary grup wynik przedstawia różnicę średnich grupowych, 95% przedział ufności różnicy, a także p-value wskazujące, czy różnica jest istotna statystycznie.
+
+Biorąc pod uwagę porównanie między gatunkami Chinstrap i Adelie, możemy zobaczyć, że różnica średnich długości płetw wynosiła 5,87 mm (odczytane z kolumny *diff*), a 95% przedział ufności dla tej różnicy to (3,59, 8,15) (odczytane z kolumn *lwr* i *upr*). Ponieważ ten przedział ufności nie zawiera zera, możemy wnioskować, że różnica między tymi dwoma grupami jest istotnie różna. Patrząc na kolumnę *p adj*, widzimy, że p-value jest bliskie zeru (choć wynik mówi 0, p-value nigdy nie jest dokładnie równe zero), co prowadzi do tego samego wniosku.
+
+Analizując pozostałe wyniki porównania dochodzimy do wniosku, że **wszystkie gatunki różnią się istotnie pod względem długości płetw.**
+
+## Cytacja
+```{r}
+citation("palmerpenguins")
+```
+
+## Instrukcja obsługi aplikacji Shiny
+
+Aplikacja **Test ANOVA** została stworzona, aby umożliwić analizę danych statystycznych z wykorzystaniem jednoczynnikowej analizy wariancji (ANOVA). Dzięki niej użytkownik może łatwo eksplorować zależności między zmiennymi numerycznymi, sprawdzać rozkłady oraz przeprowadzać testy założeń niezbędne do poprawności analizy.
+
+Poniżej znajduje się krótki przewodnik po funkcjach aplikacji wskazujący jak z niej korzystać:
+
+**Zakładka "Wybór zmiennej zależnej"**
+
+- Wybierz zmienną numeryczną z rozwijanej listy "Zmienna numeryczna".
+
+- Kliknij przycisk "Pokaż wykresy skrzypcowe", aby wygenerować wykresy skrzypcowe dla wybranej zmiennej w zależności od gatunku pingwinów.
+
+**Zakładka "Poznanie zmiennych"**
+
+*Statystyki opisowe:*
+
+- Wybierz zmienną numeryczną z rozwijanej listy "Zmienna numeryczna".
+
+- Zobacz statystyki opisowe w tabeli.
+
+*Rozkłady:*
+
+- Wybierz zmienną numeryczną z rozwijanej listy "Zmienna zależna".
+
+- Kliknij "Pokaż Boxploty", aby wygenerować interaktywny wykres pudełkowy z wąsem.
+
+- Kliknij "Pokaż Histogramy", aby wygenerować interaktywny histogram. Dostosuj liczbę kubełków za pomocą suwaka.
+
+**Zakładka "Sprawdzanie założeń"**
+
+- Za pomocą checkboxów wybierz testy do przeprowadzenia, takie jak Shapiro-Wilk, Bartlett, Kruskal-Wallis i TukeyHSD.
+
+- Zobacz wyniki testów w aplikacji.
+
+**Zakładka "Obliczanie ANOVA"**
+
+- Po sprawdzeniu założeń kliknij przycisk "Podsumowanie ANOVA", aby przeprowadzić jednoczynnikową analizę wariancji dla uprzednio wybranej zmiennej zależnej.
+
+- Zobacz wyniki jednoczynnikowej analizy ANOVA.
+
+## Źródła
+
+- http://prac.im.pwr.wroc.pl/~sobczyk/dydaktyka/analiza_wariancji.pdf
+
+- http://home.agh.edu.pl/~mmd/_media/dydaktyka/adp/analiza_wariancji.pdf
+
+- https://bookdown.org/yihui/rmarkdown/ioslides-presentation.html
+
+- https://github.com/rjknell-zz/Ioslides_css/blob/master/slidestyles2.css
+
+
+---
+
+#### Dziękuję za uwagę
+

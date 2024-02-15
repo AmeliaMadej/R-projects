@@ -1,0 +1,195 @@
+/* Tło dla slajdów */
+slides > slide {
+  /* Gradient kolorów tła slajdu */
+  background: linear-gradient(seashell, whitesmoke); 
+  /* Kolor tła slajdu */
+  background-color: seashell;
+  padding: 50px;
+}
+
+slides > slide {
+  /* Obsługa poziomego przewijania dla slajdu */
+  overflow-x: auto !important;
+  /* Obsługa pionowego przewijania dla slajdu */
+  overflow-y: auto !important;
+}
+
+
+slides > slide:not(.slides):before {
+background-position: 96% 3%;k
+}
+
+slides > slide:not(.nobackground):before {
+  top: 50px;
+  right: 25px;
+}
+
+slides > slide:not(.nobackground):after {
+  display: none;
+}
+
+.slide-title {
+  /* Odstęp między tytułem a tekstem poniżej */
+  margin-bottom: 5px; 
+}
+
+/* Style matematyczne */
+.MathJax .mrow {
+  font-family: "Times New Roman", sans-serif;
+}
+.MathJax .mtext {
+  font-family: "Times New Roman", sans-serif;
+}
+
+/* Stylizacja dla bloków kodu */
+.prettyprint .str {
+    font-family: "Calibri", sans-serif;
+}
+
+.prettyprint .pln {
+    font-family: "Calibri", sans-serif;
+}
+
+
+
+/* Importowanie czcionek z Google Fonts */
+@import url('https://fonts.googleapis.com/css?family=Lora|Open+Sans&display=swap');
+
+@import url('https://fonts.googleapis.com/css?family=Roboto|Roboto:light&display=swap');
+
+/* Odstęp od dołu dla elementów grupy nagłówka na stronie tytułowej */
+.title-slide hgroup {
+  bottom: 50px;
+}
+
+/* Styl dla tytułu na stronie tytułowej */
+.title-slide hgroup h1 {
+  font-family: "Times New Roman", sans-serif;
+  font-size: 90px;
+  font-weight: 200;
+  line-height: 1.1;
+  letter-spacing: -3px;
+  color: #1C1C1C;
+  position: center;
+}
+
+/* Styl dla podtytułu na stronie tytułowej */
+.title-slide hgroup h2 {
+  font-family: "Times New Roman", sans-serif;
+  font-size: 60px;
+  color: #1C1C1C;
+  font-weight: inherit;
+}
+
+/* Styl dla akapitu na stronie tytułowej */
+.title-slide hgroup p {
+  font-family: "Times New Roman", sans-serif;
+  font-size: 30px;
+  font-weight: 250;
+  color: dimgrey;
+  line-height: 1.3;
+  margin-top: 2em;
+  text-align: center;
+}
+
+/* Styl dla zwykłego tekstu akapitu */
+p {
+  font-family: "Times New Roman", Serif;
+  color: dimgrey;
+}
+
+/* Listy nieuporządkowane */
+ul {
+  font-family: "Times New Roman", sans-serif;
+  color: dimgrey;
+}
+
+/* Listy uporządkowane */
+li {
+  font-family: "Times New Roman", sans-serif;
+  color: dimgrey;
+}
+
+/* Tło dla bloków kodu */
+.prettyprint {
+  background-color: white;
+}
+
+
+
+
+/* Nagłówki */
+h1 {
+  font-family: "Times New Roman", sans-serif;
+  color: dimgrey;
+  font-weight: 200;
+  font-size: 40px;
+
+}
+
+h2 {
+  font-family: "Times New Roman", sans-serif;
+  color: dimgrey;
+  font-weight: 200;
+  font-size: 40px;
+}
+
+h3 {
+  font-family: "Times New Roman", sans-serif;
+  color: dimgrey;
+  font-weight: 200;
+  font-size: 40px;
+}
+
+h4 {
+  font-family: "Times New Roman", sans-serif;
+  color: dimgrey;
+  font-weight: 200;
+  font-size: 60px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+/* Hiperłącza */
+a {
+  color: darkblue;
+  text-decoration: none;
+  border-bottom: 1px solid darkblue;
+}
+
+a:hover {
+  /* Kolor hiperłącza po najechaniu myszą */
+  color: black !important;
+  /* Linia pod spodem hiperłącza po najechaniu myszą */
+    border-bottom: 1px solid black;
+}
+
+
+
+
+
+/* Styl dla tekstu auto-fadein h2 */
+.auto-fadein h2{
+  font-family: "Times New Roman", sans-serif;
+  color: #1C1C1C;
+  font-weight: 200;
+  font-size: 100px;
+  line-height: 1.1;
+  position: relative;
+  left: -6px;
+
+}
+  
+/* Kontroluje tło slajdu dla slajdów tytułowych na najwyższym poziomie */
+slides > slide.dark {
+  background: whitesmoke;
+  /*linear-gradient(#99a5b9, #abb5c5) !important;*/
+}
+
+/* Ustawia maksymalną szerokość dla obrazków, aby zachować proporcje */
+img { 
+  max-width:100%; 
+  height: auto; 
+}

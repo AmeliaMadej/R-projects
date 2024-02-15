@@ -1,0 +1,1049 @@
+---
+title: "Eksploracyjna Analiza Danych"
+subtitle: "Badanie zależności dotyczących rocznego wynagrodzenia"
+author: "Amelia Madej"
+date: "2023-11-15"
+output: 
+  html_document:
+    toc: true
+    toc_float: 
+      smoot_scrool: true
+    df_print: paged
+---
+
+# Wprowadzenie
+Zestaw danych `Salary` dostarcza informacji o wynagrodzeniach z różnych branż i regionów na całym świecie. Pozyskane z renomowanych stron z ofertami pracy i ankiet, dane zawierają szczegóły dotyczące tytułów zawodowych, zarobków, płci, rasy i innych istotnych aspektów.
+
+Źródło: https://www.kaggle.com/datasets/amirmahdiabbootalebi/salary-by-job-title-and-country
+
+# Zmienne występujące w zestawie danych
+
+**Wiek:** Zmienna liczbowa reprezentująca wiek respondentów.
+
+**Płeć:** Zmienna tekstowa określająca płeć respondentów (`Male`/`Female`).
+
+**Poziom wykształcenia:** Zmienna numeryczna, gdzie: `0` - High School, `1` - Bachelor's Degree, `2` - Master's Degree, `3` - Doctor of Philosophy
+
+**Tytuł zawodowy:** Zmienna tekstowa opisująca tytuł zawodowy.
+
+**Lata doświadczenia:** Zmienna liczbowa przedstawiająca liczbę lat doświadczenia zawodowego respondentów.
+
+**Wynagrodzenie roczne:** Zmienna liczbowa reprezentująca roczne wynagrodzenie.
+
+**Kraj:** Zmienna tekstowa informująca o kraju, w którym pracują respondenci (`Australia`, `Canada`, `China`, `UK`, `USA`).
+
+**Rasa:** Zmienna tekstowa opisująca rasę respondentów (`Asian`, `Black`, `Mixed`, `White`).
+
+**Senior:** Zmienna logiczna (`TRUE`/`FALSE`), informująca, czy respondent zajmuje stanowisko seniorskie.
+
+**Dział:** Zmienna opisująca przynależność respondentów do określonego działu.
+
+*Uwaga:* Zmienna `Department` została utworzona w celu usprawnienia analizy dotyczącej zmiennej
+`Job.Title`.
+
+# Niezbędne pakiety
+
+```{r, include = FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+install.packages("dplyr")
+install.packages("tidyverse")
+install.packages("ggplot2")
+install.packages("mice")
+install.packages("corrplot")
+install.packages("psych")
+install.packages("RColorBrewer")
+```
+
+
+```{r, warning = FALSE, message=FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(mice)
+library(corrplot)
+library(RColorBrewer)
+library(psych)
+```
+
+# Przygotowanie i eksploracja danych
+Wczytuję plik `Salary.csv` do R:
+
+```{r}
+setwd("C:/Users/Amelia/Desktop/AGH/III semestr/Wstep do analizy danych/EDA-Salary")
+Salary <- read.csv("Salary.csv")
+```
+
+
+Wyświetlam podstawowe informacje o zestawie danych `Salary`.
+
+```{r}
+head(Salary)
+tail(Salary)
+```
+Sprawdzam strukturę zestawu danych:
+
+```{r}
+str(Salary)
+```
+
+Zauważam, że liczba różnych stanowisk pracy jest duża, posługuję się funkcją `table()`, aby dowiedzieć się ile osób zajmuje poszczególne stanowiska.
+
+```{r}
+table(Salary$Job.Title)
+length(unique(Salary$Job.Title))
+```
+
+Liczba różnych stanowisk jest duża, a w niektórych nazwach jedyną różnicę stanowi wielkość liter, zatem przekształcam wszystkie litery w tytułach stanowisk na małe, aby umożliwić jednolite porównanie.
+
+```{r}
+Salary$Job.Title <- tolower(Salary$Job.Title)
+table(Salary$Job.Title)
+length(unique(Salary$Job.Title))
+```
+Ze względu na dużą liczbę różnych stanowisk pracy tworzę nową zmienną `Department`, która będzie przydzielała stanowiska do odpowiednich dla nich działów np. `software engineer` będzie w dziale `IT`. Umożliwi mi to analizę wynagrodzeń, doświadczenia, czy innych zmiennych w kontekście poszczególnych działów. 
+ 
+```{r}
+Salary <- Salary %>%
+  mutate(Job.Title = trimws(Job.Title)) %>%
+  
+  mutate("Department" = case_when(
+    Job.Title %in% c("account executive", "account manager", "accountant", "director of finance", "financial advisor", "financial analyst", "financial manager", "vp of finance") ~ "finance", 
+    
+    Job.Title %in% c("advertising coordinator", "content marketing manager", "copywriter", "creative director", "digital content producer", "digital marketing manager", "digital marketing specialist", "director of marketing", "marketing analyst", "marketing coordinator", "marketing director", "marketing manager", "marketing specialist", "product marketing manager", "social media man", "social media manager", "social media specialist", "public relations manager") ~ "marketing",
+    
+    Job.Title %in% c("administrative assistant", "manager", "office manager", "project coordinator", "strategy consultant", "event coordinator", "director", "ceo") ~ "administration",
+    
+    Job.Title %in% c("back end developer", "chief technology officer", "developer", "front end developer", "full stack engineer", "graphic designer", "it consultant", "it manager", "it project manager", "it support", "it support specialist", "network engineer", "software architect", "software developer", "software engineer", "software engineer manager", "software manager", "software project manager", "ux designer", "ux researcher", "web designer", "web developer", "director of engineering", "engineer", "principal engineer", "principal scientist", "help desk analyst", "project engineer", "project manager", "technical support specialist", "technical writer", "designer") ~ "IT",
+    
+    Job.Title %in% c("business analyst", "business development associate", "business development manager", "business intelligence analyst", "business operations analyst", "director of business development") ~ "business development",
+    
+    Job.Title %in% c("chief data officer", "data analyst", "data engineer", "data entry clerk", "data scientist", "director of data science", "quality assurance analyst", "research director", "research scientist", "researcher", "scientist") ~ "data",
+    
+    Job.Title %in% c("customer service manager", "customer service rep", "customer service representative", "customer success manager", "customer success rep", "customer support specialist", "receptionist", "consultant") ~ "customer service",
+    
+    Job.Title %in% c("director of hr", "director of human capital", "director of human resources", "hr coordinator", "hr generalist", "hr manager", "hr specialist", "human resources coordinator", "human resources director", "human resources manager", "human resources specialist", "juniour hr coordinator", "juniour hr generalist", "recruiter", "technical recruiter", "training specialist") ~ "HR",
+    
+    
+    Job.Title %in% c("director of operations", "operations analyst", "operations coordinator", "operations director", "operations manager", "vp of operations", "supply chain analyst", "supply chain manager", "delivery driver") ~ "operations",
+
+    
+    Job.Title %in% c("director of sales", "director of product management", "director of sales and marketing", "product designer", "product development manager", "product manager", "sales associate", "sales director", "sales executive", "sales manager", "sales operations manager", "sales representative") ~ "sales",
+    TRUE ~ "inne"
+  ))
+```
+
+
+Sprawdzam, które stanowiska występują więcej niż 50 razy, wykorzystuję do tego pakiet `dplyr`.
+
+```{r}
+Salary %>%
+  group_by(Job.Title) %>%
+  summarise(count = n()) %>%
+  filter(count > 50) 
+
+```
+
+Łączę ze sobą stanowiska ze zbliżonymi do siebie kompetencjami np. `marketing manager` i `marketing director` łączę w `marketing professional`. W tym celu używam funkcji `case_when()` do określenia wielu warunków. Wartości `TRUE ~ Job.Title` oznaczają, że jeśli nie spełnione są żadne z wcześniej zdefiniowanych warunków, zachowujemy oryginalną wartość. Pobieram wybrane tytuły stanowisk pracy do wektora `selected_job_titles` za pomocą funkcji `pull()`. Nazwy stanowisk inne niż we wcześniej wspomnianym wektorze zaliczam do kategorii `other`. Usuwam nieużywane poziomy w kolumnie `Job.Title` wykorzystując funkcję `droplevels()`. Powyższe kroki pomagają w stworzeniu bardziej zorganizowanej i zrozumiałej struktury stanowisk pracy, co ułatwia dalszą analizę i interpretację danych związanych z zatrudnieniem.
+
+```{r}
+selected_job_titles <- Salary %>%
+  mutate(Job.Title = trimws(Job.Title)) %>%
+  mutate("Muteated" = case_when(
+    
+    Job.Title %in% c("marketing manager", "marketing director", "marketing coordinator", "director of marketing", "content marketing manager", "digital marketing manager", "social media man", "social media manager", "advertising coordinator", "content marketing manager", "creative director", "digital marketing manager", "product marketing manager", "social media manager", "public relations manager") ~ "marketing professional",
+    
+    Job.Title %in% c("hr coordinator", "hr manager", "human resources coordinator", "human resources director", "human resources manager", "director of hr", "director of human resources", "juniour hr coordinator", "director of human capital") ~ "hr professional",
+    
+    Job.Title %in% c("sales director", "sales executive", "sales manager", "director of sales", "director of sales and marketing", "sales operations manager", "director of product management", "product development manager", "product manager") ~ "sales professional",
+    
+    Job.Title %in% c("customer service manager", "customer success manager", "customer service rep", "customer success rep", "customer support specialist") ~ "customer service professional",
+    
+    Job.Title %in% c("data analyst", "data engineer", "data entry clerk") ~ "data analyst",
+    
+    Job.Title %in% c("chief data officer", "director of data science") ~ "data science professional",
+    
+    Job.Title %in% c("account manager", "director of finance", "financial manager", "financial advisor", "vp of finance") ~ "financial professional",
+    
+    Job.Title %in% c("product development manager", "product manager", "director of product management", "product development manager") ~ "product manager",
+    
+    Job.Title %in% c("project coordinator", "project manager") ~ "project manager", 
+    
+    TRUE ~ Job.Title)) %>%
+  group_by(Job.Title) %>%
+  summarise(count = n()) %>%
+  filter(count > 50) %>%
+  pull(Job.Title)
+
+
+Salary <- Salary %>%
+  mutate(Job.Title = case_when(
+    !Job.Title %in% selected_job_titles ~ "other",
+    TRUE ~ Job.Title
+  ))
+
+
+Salary <- Salary %>%
+  filter(Job.Title %in% c(selected_job_titles, "other")) %>%
+  droplevels()
+
+table(Salary$Job.Title)
+```
+
+W strukturze zestawu danych widnieje też podejrzanie duża liczba zadeklarowanych ras, aby bliżej przyjrzeć się tej sytuacji, sprawdzam unikalne poziomy tej zmiennej:
+
+```{r}
+table(Salary$Race)
+```
+
+Liczba zadeklarowanych ras jest całkiem spora. Dokonuję pewnego uproszczonego podziału osób na podstawie informacji o pochodzeniu etnicznym. Rozważam następujący sposób klasyfikacji:
+
+**Biała (White):**
+
+- White
+
+- Welsh
+
+- Australian
+
+**Czarna (Black):**
+
+- Black
+
+- African American
+
+**Azjatycka (Asian):**
+
+- Asian
+
+- Chinese
+
+- Korean
+
+**Mieszana (Mixed):**
+
+- "Hispanic"
+
+- "Mixed"
+
+W tym celu ponownie wykorzystuję funkcję `case_when()` do określenia konkretnych warunków dotyczących ustalonego podziału. Usuwam nieużywane nazwy kategorii dla zmiennej `Race` wykorzystując funkcję `droplevels()`.
+
+```{r}
+Salary <- Salary %>%
+  mutate(Race = case_when(
+  Race %in% c("White", "Welsh", "Australian") ~ "White",
+  Race %in% c("Black", "African American") ~ "Black",
+  Race %in% c("Asian", "Chinese", "Korean") ~ "Asian",
+  Race %in% c("Hispanic", "Mixed") ~ "Mixed",
+  TRUE ~ Race)) %>%
+  droplevels()
+```
+
+Sprawdzam ponownie liczność każdej z ras:
+```{r}
+table(Salary$Race)
+```
+
+Sprawdzam ponownie strukturę pliku, aby przyjrzeć się rodzajom zmiennych:
+
+```{r}
+str(Salary)
+```
+
+Można zauważyć, że zestaw danych `Salary` zawiera całkiem sporo zmiennych tekstowych. Zamieniam je na zmienne typu `factor`, aby były rozróżnialne. Zmienną `senior` zamieniam na zmienną typu `logical`.
+
+```{r}
+Salary$Education.Level <- as.factor(Salary$Education.Level)
+Salary$Gender <- as.factor(Salary$Gender)
+Salary$Job.Title <- as.factor(Salary$Job.Title)
+Salary$Country <- as.factor(Salary$Country)
+Salary$Race <- as.factor(Salary$Race)
+Salary$Department <- as.factor(Salary$Department)
+Salary$Senior <- as.logical(Salary$Senior)
+
+str(Salary)
+
+```
+
+Weryfikuję obecność braków danych w moim zestawie danych za pomocą funkcji `md.pattern()` z pakietu `mice`.
+
+```{r}
+mice::md.pattern(Salary, rotate.names = TRUE)
+```
+Jak widać - w moim zestawie danych nie występują wartości brakujące.
+
+
+Wyświetlam podstawowe statystyki opisowe dla zestawu danych `Salary`.
+
+```{r}
+summary(Salary)
+```
+Wykorzystuję funkcję `describe()` do wyświetlenia większej ilości statystyk opisowych dla zmiennych ilościowych.
+
+```{r}
+Salary %>%
+  select(Age, Years.of.Experience, Salary) %>%
+  describe()
+```
+
+Na podstawie przeglądu statystyk opisowych można podejrzewać obecność wartości odstających zarówno dla zmiennej `Age`, jak i dla zmiennej `Years.of.Experience`.
+
+
+Aby lepiej zilustrować to zjawisko, użyję wykresu pudełkowego dla zmiennych `Age`, `Years.of.Experience` oraz `Salary`.
+
+```{r}
+# Wykres pudełkowy dla zmiennej Age
+Salary %>%
+  ggplot(aes(x = "", y = Age)) +
+  geom_boxplot() +
+  labs(title = "Wiek", x = "", y = "Wiek") +
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_flip()
+
+# Wykres pudełkowy dla zmiennej Salary
+Salary %>%
+  ggplot(aes(x = "", y = Salary)) +
+  geom_boxplot() +
+  labs(title = "Wynagrodzenie", x = "", y = "Wynagrodzenie") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_flip()
+
+# Wykres pudełkowy dla zmiennej Years.of.Experience
+Salary %>%
+  ggplot(aes(x = "", y = Years.of.Experience)) +
+  geom_boxplot() +
+  labs(title = "Doświadczenie", x = "", y = "Lata") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_flip()
+
+```
+
+Wykresy pudełkowe również sugerują występowanie wartości odstających dla wcześniej wspomnianych zmiennych. Sprawdźmy jednak jaka jest ich ilość. Do zrobienia tego tworzę funkcję `number_of_outliers()` i stosuję ją dla zmiennych `Age` oraz `Years.of.Experience`.
+
+```{r}
+number_of_outliers <- function(data){
+  Q1 = quantile(data, 0.25)
+  Q3 = quantile(data, 0.75)
+  
+  IQR = Q3 - Q1
+  
+  lower_bound = Q1 - 1.5*IQR
+  upper_bound = Q3 + 1.5*IQR
+  
+  return(sum(data<lower_bound | data > upper_bound))
+}
+
+# Liczba wartości odstających dla zmiennej Age
+number_of_outliers(Salary$Age)
+
+# Liczba wartości odstających dla zmiennej Years.of.Experience
+number_of_outliers(Salary$Years.of.Experience)
+```
+
+Ilość obserwacji odstających w przypadku obu zmiennych nie jest znacząca w porównaniu do ogólnej liczby dostępnych danych w całym zestawie. Niemniej jednak, z uwagi na ich potencjalne cenne informacje, nie decyduję się ich usuwać. Te wartości odstające mogą być istotne dla dalszej analizy wynagrodzeń i wniosków w kontekście specyfiki danych.
+
+
+# Zmienne ilościowe
+
+## Zmienna Age
+
+Przyglądam się zmiennej `Age`:
+
+```{r}
+Salary %>%
+  ggplot() +
+  geom_density(mapping = aes(x = Age),
+               color = "royalblue",
+               fill = "lightblue",
+               alpha = 0.4,
+               linewidth = 1) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Rozkład wieku",
+       x = "Wiek", 
+       y = "Odsetek osób")
+```
+
+```{r}
+summary(Salary$Age)
+```
+
+Rozkład powyższej cechy jest prawostronnie skośny. Widzimy, że w zestawie danych występują osoby w wieku od 21 do 62 lat. Największa ilość osób znajduje się w przedzale od 28 do 38 lat. Niewielka jest jednak liczba osób starszych (na co wskazywała nam już liczba wartości odstających).
+
+## Zmienna Years.of.Experience
+
+Przyglądam się zmiennej `Years.of.Experience`:
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_density(mapping = aes(x = Years.of.Experience),
+               color = "royalblue",
+               fill = "lightblue",
+               alpha = 0.4,
+               linewidth = 1) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Lata doświadczenia",
+       x = "Lata", 
+       y = "Odsetek osób")
+```
+
+```{r}
+summary(Salary$Years.of.Experience)
+```
+Widzimy, że zmienna `Years.of.Experience` również ma rozkład prawostronnie skośny. Liczba lat doświadczenia znajduje się w przedziale od 0 do 34 lat. Największa liczba osób znajduje się w przedziale od 3 do 12 lat doświadczenia. Liczba osób z doświadczeniem większym niż 25 lat jest stosunkowo niewielka.
+
+## Zmienna Salary
+
+Sprawdzam rozkład zmiennej `Salary`:
+
+```{r}
+Salary %>%
+  mutate(salary_tys = Salary/1000) %>%
+  ggplot() +
+  geom_density(mapping = aes(x = salary_tys),
+               color = "royalblue",
+               fill = "lightblue",
+               alpha = 0.4,
+               linewidth = 1) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wynagrodzenie roczne w tys. dolarów",
+       x = "Wynagrodzenie (w tys. dolarów)",
+       y = "Odsetek osób")
+```
+
+Z analizy wykresu można wyciągnąć wniosek, że zmienna Salary wykazuje cechy rozkładu dwumodalnego, co oznacza, że istnieją dwie wyraźne grupy pracowników o różnych poziomach wynagrodzeń. Jedna z tych grup koncentruje się wokół średniej wartości 50 tysięcy rocznie, podczas gdy druga grupa wykazuje średnią wynagrodzeń na poziomie 200 tysięcy rocznie. 
+
+Wyświetlam statystyki opisowe dla powyższej zmiennej:
+
+```{r}
+summary(Salary$Salary)
+```
+Sprawdzam ile wynosi kwantyl rzędu 0,01:
+
+```{r}
+quantile(x = Salary$Salary, probs = 0.01)
+```
+Mniej niż 1% osób zarabia co najwyżej 25 000 rocznie, a minimalna wartość wynagrodzenia w zbiorze to 350. Przyglądam się danym, w których wynagrodzenie mieści się w przedziale od 0 do 25 000, ponieważ podejrzewam, że są to błędnie wprowadzone dane:
+
+```{r}
+Salary %>%
+  filter(Salary > 0 & Salary < 25000)
+```
+
+Biorąc pod uwagę stanowiska zajmowane przez te osoby oraz państwa w jakich pracują, można stwierdzić, że wynagrodzenie zostało błędnie uzupełnione. Pozbywam się niepoprawnie wprowadzonych danych. 
+
+```{r}
+Salary <- Salary %>%
+  filter(Salary >= 25000)
+```
+
+Dodatkowo, zamieniam wartości wynagrodzeń tak, aby były podane w tysiącach dla zwiększenia czytelności późniejszych wykresów.
+
+```{r}
+Salary <- Salary %>%
+  mutate(Salary = Salary/1000)
+
+head(Salary)
+```
+
+
+
+# Zmienne kategoryczne
+
+## Zmienna Gender
+
+Sprawdzam rozkład zmiennej `Gender`:
+
+```{r}
+table(Salary$Gender)
+```
+Zestaw danych zawiera zbliżoną liczbę informacji o mężycznach i o kobietach, co korzystnie wpływa na dalszą analizę - równowaga płciowa w danych pozwala na bardziej wiarygodne i dokładne wnioski dotyczące różnic między płciami.
+
+## Zmienna Education.Level
+
+Sprawdzam rozkład zmiennej `Education.Level`:
+
+```{r}
+Salary %>%
+  ggplot(aes(x = Education.Level)) +
+  geom_bar(color = "navyblue", 
+           fill = "lightblue") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Rozkład poziomów edukacji", 
+       x = "Poziom edukacji", 
+       y = "Liczba osób")
+
+```
+
+```{r}
+table(Salary$Education.Level)
+```
+
+Obserwując dane, zauważalne jest, że najmniejszą grupę stanowią osoby z najniższym poziomem wykształcenia (High School). Zdecydowanie najliczniejszą grupę tworzą osoby posiadające stopień Bachelor's Degree, który odpowiada polskiemu tytułowi licencjata.
+
+## Zmienna Country
+
+Przyglądam się zmiennej `Country`:
+
+```{r}
+Salary %>%
+  ggplot(aes(x = Country)) +
+  geom_bar(color = "navyblue", 
+           fill = "lightblue") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Państwa", 
+       x = "Państwa", 
+       y = "Liczba osób")
+
+```
+
+```{r}
+table(Salary$Country)
+```
+W zestawie danych zauważalna jest równomierna dystrybucja informacji z każdego z państw - grupy nie dominują ilościowo nad innymi, co umożliwia bardziej obiektywne spojrzenie na różnice i podobieństwa.
+
+
+## Zmienna Race
+
+Przyglądam się zmiennej `Race`:
+
+```{r}
+Salary %>%
+  ggplot(aes(x = Race)) +
+  geom_bar(color = "navyblue", 
+           fill = "lightblue") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Rasy ludzkie", 
+       x = "Rasa", 
+       y = "Liczba osób")
+```
+
+```{r}
+table(Salary$Race)
+```
+Jak widać, największą liczebnością charakteryzują się kategorie `Asian` oraz `White` - nie dziwi mnie to ze względu na wcześniej analizowaną zmienną `Country`.
+
+
+## Zmienna Senior
+
+Przyglądam się zmiennej `Senior`:
+
+```{r}
+Salary %>%
+  ggplot(aes(x = Senior)) +
+  geom_bar(color = "navyblue", 
+           fill = "lightblue") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Stanowisko seniorskie", 
+       x = "Senior", 
+       y = "Liczba osób",
+       caption = "'TRUE' - Senior")
+```
+
+```{r}
+table(Salary$Senior)
+```
+
+
+Rozkład tej zmiennej wskazuje, że mniejszość pracowników została sklasyfikowana jako `Senior`, podczas gdy większość stanowią pracownicy niezajmujący tego stanowiska.
+
+
+
+
+# Część badawcza
+
+## Zależności między zmiennymi
+
+W tym etapie analizy badam wzajemne związki między zmiennymi ilościowymi. Celem jest zidentyfikowanie ewentualnych korelacji i wzorców, które mogą istnieć między różnymi cechami w zestawie danych `Salary`.
+
+```{r}
+cor = cor(Salary[, c("Age", "Years.of.Experience", "Salary")],
+          method = "spearman")
+round(cor, 2)
+```
+
+Wykorzystuję funkcję `corrplot()` do wizualizacji powiązań między zmiennymi: `Age`, `Years.of.Experience` oraz `Salary`.
+
+```{r}
+corrplot(cor, method = "color", 
+         type = "upper",
+         order = "hclust",
+         tl.col="black", 
+         tl.srt=45)
+```
+Wykres pokazuje, że wszystkie zmienne ilościowe z zestawu danych `Salary` są ze sobą silnie skorelowane.
+
+
+## 1. Rozkład płac w zależności od doświadczenia zawodowego
+
+### 1.1. Jak kształtuje się rozkład płac wśród pracowników o różnym stażu pracy?
+
+Poniższy wykres punktowy przedstawia rozkład płac w kontekście lat doświadczenia zawodowego pracowników. Wykorzystuję skalę tysięcy dla czytelności.
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_point(aes(x = Years.of.Experience, y = Salary),
+             color = "red",
+             alpha = 0.2) +
+  labs(title = "Wykres punktowy dla zarobków i stażu pracy",
+       x = "Lata doświadczenia",
+       y = "Zarobki (tys.)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_brewer(palette = "Set2")
+```
+
+Na powyższym wykresie punktowym widoczna jest zgodność z wcześniejszymi wynikami analizy korelacji. Obserwujemy, że istnieje dodatnia zależność między stażem pracy a poziomem wynagrodzenia – pracownicy z większym doświadczeniem zazwyczaj osiągają wyższe zarobki. Niemniej jednak, warto zauważyć pewną stagnację w zarobkach osób z doświadczeniem przekraczającym 20 lat. Obserwacja sugeruje, że w miarę wydłużania się stażu zawodowego, poziom wynagrodzenia w późniejszych etapach kariery stabilizuje się.
+
+### 1.2. Czy wynagrodzenie pracowników na stanowiskach seniorskich rośnie wraz z wydłużaniem się ich lat doświadczenia?
+
+Poniższy wykres punktowy ilustruje zależność między latami doświadczenia a poziomem wynagrodzenia pracowników na stanowiskach seniorskich (oznaczonych różnymi kolorami).
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_point(aes(x = Years.of.Experience, y = Salary, col = Senior),
+             alpha = 0.3) +
+  labs(title = "Wykres punktowy dla zarobków i stażu pracy",
+       x = "Lata doświadczenia",
+       y = "Zarobki (tys.)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Poniżej przedstawiam związek między latami doświadczenia a poziomem wynagrodzenia osób na różnych stanowiskach, uwzględniając podział na dwa osobne wykresy:
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_point(aes(x = Years.of.Experience, y = Salary, col = Senior),
+             alpha = 0.2) +
+  labs(title = "Wykres punktowy dla zarobków i stażu pracy",
+       x = "Lata doświadczenia",
+       y = "Zarobki (tys.)") +
+  facet_grid(Senior ~ .) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Na podstawie powyższych wykresów można jednoznacznie stwierdzić, że wynagrodzenie pracowników na stanowiskach seniorskich rośnie wraz z wydłużaniem się ich lat doświadczenia. Niemniej jednak, nie obserwuje się istotnej różnicy w trendzie wzrostu zarobków w miarę wydłużania się stażu pracy między osobami zajmującymi stanowiska seniorskie a tymi, które nie posiadają tego statusu. Co więcej, w obu grupach zauważalna jest stagnacja rocznego wynagrodzenia osób, których staż pracy wynosi co najmniej 15 lat.
+
+
+### 1.3. Czy wpływ lat doświadczenia na płace jest zróżnicowany w zależności od działu?
+
+Na wykresie punktowym analizowana jest zależność między latami doświadczenia a poziomem wynagrodzenia w poszczególnych działach z wykorzystaniem funkcji `facet_wrap()`. Wykres ten umożliwia zobaczenie, czy wpływ lat doświadczenia na płace jest zróżnicowany w zależności od przynależności do konkretnego działu.
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_point(aes(x= Years.of.Experience, y = Salary),
+             alpha = 0.2,
+             color = "royalblue")+
+  facet_wrap(Department ~ ., ncol = 5)+
+  theme_light() +
+  labs(title = "Lata doświadczenia, a wynagrodzenie w poszczególnych działach",
+       x = "Lata doświadczenia",
+       y = "Zarobki (tys.)")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Zauważam, że poziomy wynagrodzenia różnią się między poszczególnymi działami. Niektóre działy mogą charakteryzować się wyższymi wynagrodzeniami niż inne, co może być wynikiem specyfiki pracy w danym obszarze. Dla stażu poniżej 15 lat, istnieje ogólna tendencja wzrostowa, gdzie zwiększający się staż zawodowy koreluje z wyższymi wynagrodzeniami. Jednakże, dla staży powyżej 15 lat, obserwujemy pewne zróżnicowanie w dynamice wzrostu płac między działami.
+ 
+## 2. Wpływ poziomu wykształcenia na zarobki
+
+### 2.1. Czy posiadanie wyższego wykształcenia przekłada się na wyższe wynagrodzenie?
+
+Poniższy wykres gęstości przedstawia rozkład zarobków w zależności od poziomu wykształcenia:
+
+```{r}
+Salary %>%
+  ggplot() +
+  geom_density(aes(x = Salary, 
+                     fill = Education.Level),
+                     position = "identity", 
+                     alpha = 0.8) +
+  labs(title = "Rozkład zarobków dla poszczególnych poziomów wykształcenia",
+       x = "Zarobki (tys.)",
+       y = "Odsetek pracowników",
+       fill = "Poziom wykształcenia") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_brewer(palette = "Set2")
+
+```
+
+Wyraźnie zauważalne są różnice w rozkładach między poszczególnymi grupami. Możemy zauważyć, że pracownicy z wyższym wykształceniem (w tym doktoratem) często osiągają wyższe zarobki w porównaniu do tych z niższym poziomem edukacji. Spróbuję to jeszcze pokazać za pomocą wykresu pudełkowego.
+
+```{r}
+Salary %>%
+  ggplot() +
+  geom_boxplot(aes(x = Education.Level, 
+                   y = Salary, color  = 
+                     Education.Level))+
+  labs(title = "Rozkład zarobków w zależności od poziomu wykształcenia",
+       x = "Poziom wykształcenia",
+       y = "Zarobki (tys.)",
+       color = "Poziom wykształcenia") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_brewer(palette = "Set2")
+```
+
+Obserwujemy, że im wyższy poziom wykształcenia, tym wyższe są mediany oraz górne kwartyle zarobków, co sugeruje, że posiadanie wyższego wykształcenia może być powiązane z wyższymi wynagrodzeniami.
+
+Podsumowując, analiza rozkładu zarobków w kontekście poziomu wykształcenia wyraźnie uwydatnia istotne zróżnicowanie między tymi dwiema zmiennymi. Obserwujemy wyraźne różnice w wynagrodzeniach pracowników o różnym stopniu wykształcenia, gdzie osoby z wyższym wykształceniem prezentują tendencję do zarabiania więcej.
+
+
+## 3. Zróżnicowanie między płciami
+
+### 3.1. Jakie są różnice w wynagrodzeniach między kobietami a mężczyznami?
+
+Poniższy wykres gęstości przedstawia rozkłady zarobków dla kobiet i mężczyzn. Kolorystyka odróżnia obie grupy, umożliwiając łatwe porównanie rozkładów. 
+
+```{r}
+Salary %>%
+  ggplot() +
+  geom_density(aes(x= Salary, fill = Gender),
+               alpha = 0.7) + 
+  labs(title = "Rozkład zarobków między kobietami, a mężczyznami",
+       x = "Zarobki",
+       y = "Gęstość",
+       fill = "Płeć") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Wykresy gęstości są do siebie zbliżone, jednak możemy zauważyć, że rozkład zarobków mężczyzn wydaje się być przesunięty ku wyższym wartościom w porównaniu do rozkładu zarobków kobiet. Dodatkowo, obserwujemy różnice w kształcie rozkładów, co sugeruje zróżnicowanie w wynagrodzeniach między płciami.
+
+Rysuję wykres pudełkowy, który również przedstawia rozkład zarobków dla kobiet i mężczyzn:
+
+```{r}
+Salary %>%
+  ggplot() +
+  geom_boxplot(aes(x = Gender, y = Salary, col = Gender))+
+  labs(title = "Zarobki, a płeć",
+       x = "Płeć",
+       y = "Zarobki (tys.)",
+       color = "Płeć") +
+  theme_light()+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Wyraźnie widoczne są różnice w zarobkach pomiędzy kobietami a mężczyznami, co potwierdza wcześniejsze spostrzeżenia z wykresu gęstości.
+
+Spoglądam jeszcze na statystyki opisowe dla obu grup:
+
+```{r}
+describeBy(Salary$Salary, Salary$Gender, mat = T)
+```
+Zarówno wykresy pudełkowe, jak i statystyki opisowe, dodatkowo potwierdzają moje wcześniejsze wnioski dotyczące zróżnicowania w wynagrodzeniach między kobietami a mężczyznami. Różnice te są wyraźnie widoczne zarówno na poziomie mediany, jak i w rozpiętości danych.
+
+### 3.2. Czy istnieją obszary, gdzie te różnice są bardziej zauważalne?
+
+Przyglądam się jak wygląda rozkład płci w poszczególnych działach. W tym celu rysuję wykres słupkowy. Kolorystyka pozwala na łatwą identyfikację odsetka mężczyzn i kobiet w każdym z działów.
+
+```{r}
+Salary %>%
+  ggplot() +
+  geom_bar(aes(x = Department,
+               fill = Gender),
+           color = "white", 
+           position = "fill") +
+  theme_light() +
+  labs(title = "Dział, a płeć",
+       x = "Dział",
+       y = "Odsetek osób",
+       fill = "Płeć") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+W analizie struktury płciowej w poszczególnych działach zauważalne są pewne zróżnicowania. Działy takie jak `customer service` i `HR` wydają się przeważnie obsadzane przez kobiety, podczas gdy działy związane z technologią i biznesem mają większość pracowników męskich.
+
+Porównuję różnice zarobków między płciami w różnych departamentach, co pozwoli zidentyfikować obszary, gdzie nierówności płacowe mogą być bardziej widoczne. W tym celu rysuję wykresy pudełkowe.
+
+```{r}
+Salary %>%
+  ggplot() +
+  geom_boxplot(aes(x = Department, 
+                   y = Salary, 
+                   col = Gender),
+               width = 0.7,
+               position = position_dodge2(width = 0.7)) +
+  labs(title = "Zarobki w poszczególnych działach w zależności od płci",
+       x = "Dział",
+       y = "Zarobki (tys.)",
+       col = "Płeć") +
+  theme_minimal()+ 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+```
+
+Obserwujemy wyraźną dysproporcję w wynagrodzeniach między płciami w działach `administration` oraz `finance`. W tych dwóch działach kobiety zdają się otrzymywać niższe zarobki w porównaniu do swoich męskich współpracowników. Potencjalne przyczyny tego zjawiska mogą obejmować istniejące nierówności płacowe, różnice w awansach zawodowych czy też specyfikę zadań wykonywanych w poszczególnych dziedzinach.
+
+
+### 3.3. Jak różnią się poziomy wykształcenia wśród pracowników w analizowanym zestawie danych w kontekście płci?
+
+Poniższa tabela przedstawia liczebność pracowników w zależności od płci i poziomu wykształcenia.
+
+```{r}
+table(Salary$Gender, Salary$Education.Level)
+```
+Wśród pracowników dominacja kobiet występuje w poziomach wykształcenia `0` (High School) oraz `2` (Master's Degree). Z kolei mężczyźni stanowią większość pracowników posiadających stopnie `1` (Bachelor's Degree) oraz `3` (Doctor of Philosophy). Te wyniki sugerują zróżnicowanie struktury płciowej w zależności od poziomu wykształcenia w analizowanym zbiorze danych. Możemy to sobie jeszcze zwizualizować za pomocą wykresu kolumnowego:
+
+```{r}
+Salary %>%
+  ggplot() +
+  geom_bar(aes(x = Education.Level,
+               fill = Gender),
+           position = "dodge") +
+  labs(title = "Różnice w poziomach wykształcenia między płciami",
+       x = "Poziom wykształcenia",
+       y = "Liczba osób",
+       fill = "Płeć")+
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+## 4. Zróżnicowanie pomiędzy rasami
+
+### 4.1. Jakie są różnice w zarobkach między różnymi grupami rasowymi?
+
+Poniższa tabela statystyk opisowych przedstawia różnice w zarobkach między różnymi grupami rasowymi:
+
+```{r}
+describeBy(Salary$Salary, Salary$Race, mat = T)
+```
+
+Co ciekawe, z powyższego wynika, że różnice w zarobkach między różnymi grupami rasowymi są znikome. Przyglądam się teraz kwantylom i wartościom minimalnym/maksymalnym, aby uzyskać bardziej szczegółowy obraz:
+
+```{r}
+Salary %>%
+  group_by(Race) %>%
+  summarise(
+    min = min(Salary),
+    Q01 = quantile(Salary, 0.01),
+    Q1 = quantile(Salary, 0.25),
+    Q2 = quantile(Salary, 0.5),
+    Q3 = quantile(Salary, 0.75),
+    Q99 = quantile(Salary, 0.99),
+    max = max(Salary)
+    )
+```
+
+Obserwacje zarobków w kwantylach dla różnych grup rasowych wykazują znaczne podobieństwo. Szczególnie interesujące jest to, że minimalne wynagrodzenie dla osób identyfikujących się z grupami `Black` i `White` jest takie samo, co może sugerować pewne równości płacowe między tymi dwoma rasami. Dodatkowo, zwizualizuję to sobie za pomocą wykresów pudełkowych oraz krzywych gęstości: 
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_boxplot(aes(x = Race, y = Salary)) +
+  labs(title = "Rozkład zarobków w zależności od rasy",
+       x = "Rasa",
+       y = "Zarobki (tys.)") +
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Wykresy pudełkowe zwróciły moją uwagę na to, że osoby klasyfikujące się w rasie `Mixed` zarabiają mniej niż pozostali.
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_density(aes(x = Salary, fill = Race),
+               alpha = 0.5) +
+  labs(title = "Rozkład zarobków w zależności od rasy",
+       x = "Zarobki (tys.)",
+       y = "Odsetek osób",
+       fill = "Rasa") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_brewer(palette = "Set2")
+```
+
+
+
+### 4.2. Jak kształtuje się zróżnicowanie zarobków w kontekście różnych grup rasowych oraz płci?
+
+Przyglądam się statystykom opisowym dla poszczególnych ras z podziałem na płeć:
+
+```{r, message=FALSE, warning=FALSE}
+Salary %>%
+  group_by(Race, Gender) %>%
+  summarise(
+    min = min(Salary),
+    Q01 = quantile(Salary, 0.01),
+    Q1 = quantile(Salary, 0.25),
+    Q2 = quantile(Salary, 0.5),
+    Q3 = quantile(Salary, 0.75),
+    Q99 = quantile(Salary, 0.99),
+    max = max(Salary)
+    )
+```
+
+W każdej z ras mężczyźni zarabiają więcej, a co więcej - ich płace są bardzo do siebie zbliżone.
+
+Modyfikuję wykres z poprzedniej części o uwzględnienie podziału ze względu na płeć:
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_boxplot(aes(x = Race, y = Salary, col = Gender)) +
+  labs(title = "Rozkład zarobków w zależności od rasy i płci",
+       x = "Rasa",
+       y = "Zarobki (tys.)",
+       col = "Płeć") +
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Analiza zarobków w poszczególnych grupach rasowych wskazuje na istotne różnice między płciami. W każdej z badanych ras to mężczyźni osiągają wyższe zarobki niż kobiety. Co ciekawe, obserwujemy jednolite wynagrodzenia zarówno dla mężczyzn, jak i kobiet w obrębie każdej z ras, co może być istotnym spostrzeżeniem w kontekście równości płacowej wewnątrz poszczególnych grup rasowych.
+
+
+## 5. Analiza zależności w kontekście krajów
+
+Na początku przyglądam się rozkładowi zarobków w zależności od kraju pochodzenia respondenta:
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_density(aes(x = Salary, fill = Country),
+               alpha = 0.5) +
+  labs(title = "Rozkład zarobków w zależności od kraju",
+       x = "Zarobki (tys.)",
+       y = "Odsetek osób",
+       fill = "Kraj") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_fill_brewer(palette = "Set2")
+```
+
+Jak widać, rozkłady zarobków dla poszczególnych państw są do siebie bardzo zbliżone, co sugeruje równość płacową.
+
+### 5.1. Czy płaca roczna różni się między płciami w badanych krajach?
+
+Przyglądam się zależnościom między płacą roczną a płcią pracowników w różnych krajach. Poniżej wyznaczam statystyki opisowe dla zarobków w poszczególnych krajach z podziałem na płeć:
+
+```{r, message=FALSE, warning=FALSE}
+Salary %>%
+  group_by(Country, Gender) %>%
+  summarise(
+    min = min(Salary),
+    Q01 = quantile(Salary, 0.01),
+    Q1 = quantile(Salary, 0.25),
+    Q2 = quantile(Salary, 0.5),
+    Q3 = quantile(Salary, 0.75),
+    Q99 = quantile(Salary, 0.99),
+    max = max(Salary)
+    )
+```
+
+W niektórych krajach obserwuje się istotne różnice w zarobkach między mężczyznami a kobietami, co może wskazywać na istnienie problemu nierówności płacowej (np. w Chinach). Z drugiej strony, w niektórych krajach różnice te są mniej zauważalne (np. Kanada).
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_boxplot(aes(x = Country, y = Salary, col = Gender))+
+  labs(title = "Różnice w zarobkach między płciami w poszczególnych krajach",
+       x = "Kraj",
+       y = "Zarobki (tys.)",
+       col = "Płeć") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+W wynikach analizy płac rocznych w poszczególnych krajach obserwowalne są pewne zauważalne tendencje. W każdym z badanych państw można stwierdzić, że zarobki kobiet skłaniają się ku niższym wartościom. Innymi słowy, płace kobiet są często niższe niż płace mężczyzn w każdym z badanych krajów. Ten wynik sugeruje obecność pewnej płciowej dysproporcji w zakresie wynagrodzeń.
+
+### 5.2. Czy związek między wiekiem a wynagrodzeniem rocznym jest podobny we wszystkich badanych krajach?
+
+Poniższy wykres punktowy przedstawia rozkład płac w kontekście wieku respondentów. Wykorzystuję skalę kolorów do odróżnienia poszczególnych państw.
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_point(aes(x = Age, 
+                 y = Salary, 
+                 col = Country),
+             alpha = 0.7)+
+  labs(title = "Związek między wiekiem, a wynagrodzeniem w różnych krajach",
+       x = "Wiek",
+       y = "Zarobki (tys.)",
+       col = "Kraj") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_brewer(palette = "Set2")
+```
+
+Poniżej przedstawiam związek między wiekiem a poziomem wynagrodzenia osób z różnych państw, uwzględniając podział na osobne wykresy:
+
+```{r}
+Salary %>%
+  ggplot()+
+  geom_point(aes(x=Age, y = Salary),
+             col = "royalblue",
+             alpha = 0.2) +
+  labs(title = "Związek między wiekiem, a wynagrodzeniem rocznym w różnych krajach",
+       x = "Wiek",
+       y = "Zarobki (tys.)") +
+  facet_wrap(~ Country, ncol = 3) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Na podstawie wykresów punktowych przedstawiających związek między wiekiem a wynagrodzeniem rocznym w różnych krajach, można zauważyć pewne ogólne tendencje. W większości krajów widać tendencję do wzrostu wynagrodzenia wraz z wiekiem. Co ciekawe, w każdym z krajów w grupie wiekowej od 45 do 55 lat widoczna jest grupa osób z wynagrodzeniem odstającym od reszty. Sprawdzam, kim są te osoby:
+
+```{r}
+Salary %>%
+  filter(Age >=45 & Age <= 55,
+         Salary > 200) %>%
+    select(Age,Gender, Education.Level, Years.of.Experience, Senior, Country) %>%
+  summary()
+```
+
+Obserwacje te sugerują, że dominującą grupę stanowią wykształcone osoby płci męskiej zajmujące stanowiska seniorskie związane z analizą danych. To zjawisko może wynikać z wyższych wymagań kwalifikacyjnych na stanowiskach seniorskich, a także ewentualnych różnic w dostępie do tych stanowisk między płciami.
+
+
+# Wnioski i podsumowanie
+
+1. Rozkład płac w zależności od doświadczenia zawodowego:
+
+- Istnieje dodatnia zależność między stażem pracy a poziomem wynagrodzenia, gdzie pracownicy z większym doświadczeniem zazwyczaj osiągają wyższe zarobki.
+
+- Stabilizacja poziomu wynagrodzenia występuje dla osób z doświadczeniem przekraczającym 20 lat.
+
+- Zarobki pracowników na stanowiskach seniorskich rosną wraz z wydłużaniem się ich lat doświadczenia. Jednak nie obserwuje się istotnej różnicy w trendzie wzrostu zarobków między osobami zajmującymi stanowiska seniorskie a tymi, które nie posiadają tego statusu.
+
+2. Wpływ poziomu wykształcenia na zarobki:
+
+- Osoby z wyższym poziomem wykształcenia (np. z tytułem Magistra oraz Doktora) często osiągają wyższe zarobki w porównaniu do osób z niższym stopniem wykształcenia.
+
+3. Zróżnicowanie między płciami:
+
+- Wyraźne różnice w zarobkach między kobietami a mężczyznami, gdzie mężczyźni zdają się osiągać wyższe wynagrodzenia.
+
+- Różnice w zarobkach są widoczne w różnych działach, z największym zróżnicowaniem w dziale administracji i finansów.
+
+4. Zróżnicowanie pomiędzy rasami:
+
+- Istnieje pewne zróżnicowanie w zarobkach między rasami (osoby rasy mieszanej zarabiają mniej niż pozostali), ale różnice te są stosunkowo niewielkie.
+
+- Analiza zarobków w poszczególnych grupach rasowych sugeruje równość płacową między rasami Black i White.
+
+5. Analiza zależności w kontekście krajów:
+
+- Zarobki kobiet skłaniają się ku niższym wartościom w każdym z badanych krajów.
+
+
+
+Analiza EDA pozwoliła na zidentyfikowanie kilku istotnych trendów i zależności w danych dotyczących płac. Widoczne są pewne nierówności płacowe między płciami, różnice w zarobkach w zależności od poziomu wykształcenia, doświadczenia zawodowego oraz obszarów zawodowych. 
